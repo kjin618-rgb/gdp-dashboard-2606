@@ -3,66 +3,99 @@ import pandas as pd
 import math
 from pathlib import Path
 
-# Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
     page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_icon=':earth_americas:',
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Maps individual country codes to world regions (excludes World Bank aggregate rows)
+REGION_MAP = {
+    'AFG': 'Asia', 'ARE': 'Asia', 'ARM': 'Asia', 'AZE': 'Asia', 'BGD': 'Asia',
+    'BHR': 'Asia', 'BRN': 'Asia', 'BTN': 'Asia', 'CHN': 'Asia', 'GEO': 'Asia',
+    'IDN': 'Asia', 'IND': 'Asia', 'IRN': 'Asia', 'IRQ': 'Asia', 'ISR': 'Asia',
+    'JOR': 'Asia', 'JPN': 'Asia', 'KAZ': 'Asia', 'KGZ': 'Asia', 'KHM': 'Asia',
+    'KOR': 'Asia', 'KWT': 'Asia', 'LAO': 'Asia', 'LBN': 'Asia', 'LKA': 'Asia',
+    'MDV': 'Asia', 'MMR': 'Asia', 'MNG': 'Asia', 'MYS': 'Asia', 'NPL': 'Asia',
+    'OMN': 'Asia', 'PAK': 'Asia', 'PHL': 'Asia', 'PSE': 'Asia', 'QAT': 'Asia',
+    'SAU': 'Asia', 'SGP': 'Asia', 'SYR': 'Asia', 'THA': 'Asia', 'TJK': 'Asia',
+    'TKM': 'Asia', 'TLS': 'Asia', 'TUR': 'Asia', 'UZB': 'Asia', 'VNM': 'Asia',
+    'YEM': 'Asia',
+    'ALB': 'Europe', 'AND': 'Europe', 'AUT': 'Europe', 'BEL': 'Europe', 'BGR': 'Europe',
+    'BIH': 'Europe', 'BLR': 'Europe', 'CHE': 'Europe', 'CYP': 'Europe', 'CZE': 'Europe',
+    'DEU': 'Europe', 'DNK': 'Europe', 'ESP': 'Europe', 'EST': 'Europe', 'FIN': 'Europe',
+    'FRA': 'Europe', 'GBR': 'Europe', 'GRC': 'Europe', 'HRV': 'Europe', 'HUN': 'Europe',
+    'IRL': 'Europe', 'ISL': 'Europe', 'ITA': 'Europe', 'LIE': 'Europe', 'LTU': 'Europe',
+    'LUX': 'Europe', 'LVA': 'Europe', 'MCO': 'Europe', 'MDA': 'Europe', 'MKD': 'Europe',
+    'MLT': 'Europe', 'MNE': 'Europe', 'NLD': 'Europe', 'NOR': 'Europe', 'POL': 'Europe',
+    'PRT': 'Europe', 'ROU': 'Europe', 'RUS': 'Europe', 'SMR': 'Europe', 'SRB': 'Europe',
+    'SVK': 'Europe', 'SVN': 'Europe', 'SWE': 'Europe', 'UKR': 'Europe', 'XKX': 'Europe',
+    'ARG': 'Americas', 'ATG': 'Americas', 'BLZ': 'Americas', 'BOL': 'Americas',
+    'BRA': 'Americas', 'BRB': 'Americas', 'CAN': 'Americas', 'CHL': 'Americas',
+    'COL': 'Americas', 'CRI': 'Americas', 'CUB': 'Americas', 'DMA': 'Americas',
+    'DOM': 'Americas', 'ECU': 'Americas', 'GTM': 'Americas', 'GUY': 'Americas',
+    'HND': 'Americas', 'HTI': 'Americas', 'JAM': 'Americas', 'MEX': 'Americas',
+    'NIC': 'Americas', 'PAN': 'Americas', 'PER': 'Americas', 'PRY': 'Americas',
+    'SLV': 'Americas', 'SUR': 'Americas', 'TTO': 'Americas', 'URY': 'Americas',
+    'USA': 'Americas', 'VCT': 'Americas',
+    'AGO': 'Africa', 'BDI': 'Africa', 'BEN': 'Africa', 'BFA': 'Africa', 'BWA': 'Africa',
+    'CAF': 'Africa', 'CIV': 'Africa', 'CMR': 'Africa', 'COD': 'Africa', 'COG': 'Africa',
+    'COM': 'Africa', 'CPV': 'Africa', 'DJI': 'Africa', 'DZA': 'Africa', 'EGY': 'Africa',
+    'ERI': 'Africa', 'ETH': 'Africa', 'GAB': 'Africa', 'GHA': 'Africa', 'GIN': 'Africa',
+    'GMB': 'Africa', 'GNB': 'Africa', 'GNQ': 'Africa', 'KEN': 'Africa', 'LBR': 'Africa',
+    'LBY': 'Africa', 'LSO': 'Africa', 'MAR': 'Africa', 'MDG': 'Africa', 'MLI': 'Africa',
+    'MOZ': 'Africa', 'MRT': 'Africa', 'MUS': 'Africa', 'MWI': 'Africa', 'NAM': 'Africa',
+    'NER': 'Africa', 'NGA': 'Africa', 'RWA': 'Africa', 'SDN': 'Africa', 'SEN': 'Africa',
+    'SLE': 'Africa', 'SOM': 'Africa', 'SSD': 'Africa', 'STP': 'Africa', 'SWZ': 'Africa',
+    'SYC': 'Africa', 'TCD': 'Africa', 'TGO': 'Africa', 'TUN': 'Africa', 'TZA': 'Africa',
+    'UGA': 'Africa', 'ZAF': 'Africa', 'ZMB': 'Africa', 'ZWE': 'Africa',
+    'AUS': 'Oceania', 'FJI': 'Oceania', 'KIR': 'Oceania', 'MHL': 'Oceania',
+    'NRU': 'Oceania', 'NZL': 'Oceania', 'PLW': 'Oceania', 'PNG': 'Oceania',
+    'SLB': 'Oceania', 'TON': 'Oceania', 'TUV': 'Oceania', 'VUT': 'Oceania',
+    'WSM': 'Oceania',
+}
+
+UNIT_OPTIONS = ['Trillion ($T)', 'Billion ($B)', 'Million ($M)']
+UNIT_DIVISOR = {'Trillion ($T)': 1e12, 'Billion ($B)': 1e9, 'Million ($M)': 1e6}
+UNIT_SUFFIX  = {'Trillion ($T)': 'T',  'Billion ($B)': 'B',  'Million ($M)': 'M'}
+
 
 @st.cache_data
 def get_gdp_data():
-    """Grab GDP data from a CSV file.
-
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
+    DATA_FILENAME = Path(__file__).parent / 'data/gdp_data.csv'
     raw_gdp_df = pd.read_csv(DATA_FILENAME)
 
     MIN_YEAR = 1960
     MAX_YEAR = 2022
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
     gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
+        ['Country Name', 'Country Code'],
         [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
         'Year',
         'GDP',
     )
 
-    # Convert years from string to integers
     gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    gdp_df['GDP'] = pd.to_numeric(gdp_df['GDP'], errors='coerce')
 
     return gdp_df
 
+
 gdp_df = get_gdp_data()
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+# Build country lookup tables (individual countries only, no World Bank aggregates)
+country_meta = (
+    gdp_df[['Country Name', 'Country Code']]
+    .drop_duplicates()
+    .pipe(lambda df: df[df['Country Code'].isin(REGION_MAP)])
+    .assign(Region=lambda df: df['Country Code'].map(REGION_MAP))
+    .sort_values('Country Name')
+)
+code_to_name = dict(zip(country_meta['Country Code'], country_meta['Country Name']))
+name_to_code = dict(zip(country_meta['Country Name'], country_meta['Country Code']))
 
-# Set the title that appears at the top of the page.
+# -----------------------------------------------------------------------------
+# Page
+
 '''
 # :earth_americas: GDP dashboard
 
@@ -71,39 +104,59 @@ notice, the data only goes to 2022 right now, and datapoints for certain years a
 But it's otherwise a great (and did I mention _free_?) source of data.
 '''
 
-# Add some spacing
 ''
 ''
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+min_value = int(gdp_df['Year'].min())
+max_value = int(gdp_df['Year'].max())
 
 from_year, to_year = st.slider(
     'Which years are you interested in?',
     min_value=min_value,
     max_value=max_value,
-    value=[min_value, max_value])
+    value=[min_value, max_value],
+)
 
-countries = gdp_df['Country Code'].unique()
+unit = st.radio('GDP unit', UNIT_OPTIONS, index=1, horizontal=True)
+divisor = UNIT_DIVISOR[unit]
+suffix  = UNIT_SUFFIX[unit]
 
-if not len(countries):
-    st.warning("Select at least one country")
+# Region filter → narrows the country list
+all_regions = sorted(country_meta['Region'].unique())
+selected_regions = st.multiselect('Filter by region', all_regions, all_regions)
 
-selected_countries = st.multiselect(
+available_names = (
+    country_meta[country_meta['Region'].isin(selected_regions)]['Country Name']
+    .sort_values()
+    .tolist()
+)
+
+default_names = [n for n in ['Germany', 'France', 'United Kingdom', 'Brazil', 'Mexico', 'Japan']
+                 if n in available_names]
+
+selected_names = st.multiselect(
     'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
+    available_names,
+    default_names,
+)
+
+if not selected_names:
+    st.warning('Select at least one country')
+    st.stop()
+
+selected_codes = [name_to_code[n] for n in selected_names]
 
 ''
 ''
 ''
 
-# Filter the data
+# Filter data
 filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
+    gdp_df['Country Code'].isin(selected_codes)
+    & gdp_df['Year'].between(from_year, to_year)
+].copy()
+filtered_gdp_df['Country Name'] = filtered_gdp_df['Country Code'].map(code_to_name)
+filtered_gdp_df[f'GDP ({suffix})'] = filtered_gdp_df['GDP'] / divisor
 
 st.header('GDP over time', divider='gray')
 
@@ -112,16 +165,15 @@ st.header('GDP over time', divider='gray')
 st.line_chart(
     filtered_gdp_df,
     x='Year',
-    y='GDP',
-    color='Country Code',
+    y=f'GDP ({suffix})',
+    color='Country Name',
 )
 
 ''
 ''
 
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
+first_year_df = gdp_df[gdp_df['Year'] == from_year]
+last_year_df  = gdp_df[gdp_df['Year'] == to_year]
 
 st.header(f'GDP in {to_year}', divider='gray')
 
@@ -129,14 +181,17 @@ st.header(f'GDP in {to_year}', divider='gray')
 
 cols = st.columns(4)
 
-for i, country in enumerate(selected_countries):
+for i, (code, name) in enumerate(zip(selected_codes, selected_names)):
     col = cols[i % len(cols)]
 
     with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+        first_rows = first_year_df.loc[first_year_df['Country Code'] == code, 'GDP']
+        last_rows  = last_year_df.loc[last_year_df['Country Code']  == code, 'GDP']
 
-        if math.isnan(first_gdp):
+        first_gdp = first_rows.iloc[0] / divisor if not first_rows.empty else float('nan')
+        last_gdp  = last_rows.iloc[0]  / divisor if not last_rows.empty  else float('nan')
+
+        if pd.isna(first_gdp) or pd.isna(last_gdp):
             growth = 'n/a'
             delta_color = 'off'
         else:
@@ -144,8 +199,8 @@ for i, country in enumerate(selected_countries):
             delta_color = 'normal'
 
         st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
+            label=f'{name} GDP',
+            value=f'{last_gdp:,.2f}{suffix}' if not pd.isna(last_gdp) else 'n/a',
             delta=growth,
-            delta_color=delta_color
+            delta_color=delta_color,
         )
